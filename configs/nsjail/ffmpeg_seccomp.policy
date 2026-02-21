@@ -1,0 +1,46 @@
+/* Strict allowlist for FFmpeg/FFprobe — deny everything except what's needed */
+POLICY ffmpeg_strict {
+  ALLOW {
+    /* Essential I/O */
+    read, write, pread64, pwrite64, readv, writev,
+    openat, close, lseek,
+
+    /* Stat operations */
+    newfstat, newfstatat, statfs,
+
+    /* Memory management */
+    mmap, munmap, mprotect, madvise, brk, mlock,
+    get_mempolicy,
+
+    /* Process lifecycle */
+    execve, exit, exit_group,
+
+    /* Threading (FFmpeg uses libx264/libx265 thread pools via clone3) */
+    clone3, futex, set_robust_list, get_robust_list,
+
+    /* Signal handling */
+    rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,
+
+    /* File operations */
+    access, fcntl, ioctl,
+    ftruncate,
+    dup, dup2,
+    unlink, unlinkat,
+
+    /* Directory operations */
+    getdents64,
+
+    /* Essential system info */
+    getuid, getgid, geteuid, getegid, getpid, gettid,
+    prlimit64, arch_prctl, set_tid_address,
+    prctl, getrusage,
+    sched_getaffinity, sched_yield,
+
+    /* Time operations */
+    clock_gettime, clock_getres, gettimeofday, nanosleep,
+
+    /* Misc */
+    getrandom, rseq
+  }
+}
+USE ffmpeg_strict DEFAULT KILL

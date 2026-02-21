@@ -1,0 +1,49 @@
+/* Strict allowlist for pandoc + typst — profiled via strace -f -c */
+POLICY pandoc_strict {
+  ALLOW {
+    /* Essential I/O */
+    read, write, pread64, pwrite64, readv, writev,
+    open, openat, close, lseek, ftruncate,
+
+    /* Stat operations */
+    newstat, newfstat, newlstat, newfstatat, statx,
+
+    /* Memory management */
+    mmap, munmap, mremap, mprotect, madvise, brk,
+    memfd_create,
+
+    /* Process lifecycle (pandoc spawns typst as subprocess) */
+    clone, execve,
+    exit, exit_group, wait4,
+
+    /* Signal handling */
+    rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,
+
+    /* File operations */
+    access, faccessat, faccessat2, getcwd,
+    dup2, fcntl, ioctl, pipe, pipe2,
+    unlink, readlink,
+
+    /* Directory operations */
+    mkdir, rmdir, getdents64,
+
+    /* Essential system info */
+    getuid, getgid, geteuid, getegid, getpid, getppid, gettid,
+    prlimit64, arch_prctl, set_tid_address,
+    prctl, sysinfo,
+
+    /* Time operations */
+    clock_gettime, clock_getres, gettimeofday, nanosleep, clock_nanosleep,
+    timerfd_create, timerfd_settime,
+
+    /* Futex for threading */
+    futex, set_robust_list, get_robust_list,
+
+    /* Polling/select */
+    poll, select,
+
+    /* Misc */
+    getrandom, umask, sched_yield, sched_getaffinity, rseq
+  }
+}
+USE pandoc_strict DEFAULT KILL

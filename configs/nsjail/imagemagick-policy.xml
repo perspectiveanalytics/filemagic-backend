@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hardened ImageMagick policy for FileMagic image-to-PDF conversion.
+
+  Mitigates:
+    - CVE-2016-3714 (ImageTragick) — delegates disabled
+    - CVE-2022-44268 — path restrictions block @file reads
+    - CVE-2016-5118 — pipe filenames blocked
+    - CVE-2016-3718 — URL/HTTP/SVG coders disabled
+    - CVE-2023-34152/34153 — shell injection via delegates blocked
+
+  Only JPEG, PNG, WEBP, BMP, TIFF input and PDF output are allowed.
+-->
+<policymap>
+  <!-- Resource limits (DoS prevention) -->
+  <policy domain="resource" name="memory" value="512MiB"/>
+  <policy domain="resource" name="map" value="512MiB"/>
+  <policy domain="resource" name="width" value="8KP"/>
+  <policy domain="resource" name="height" value="8KP"/>
+  <policy domain="resource" name="area" value="32KP"/>
+  <policy domain="resource" name="list-length" value="32"/>
+  <policy domain="resource" name="disk" value="1GiB"/>
+  <policy domain="resource" name="file" value="128"/>
+  <policy domain="resource" name="thread" value="4"/>
+  <policy domain="resource" name="time" value="120"/>
+
+  <!-- Memory security: shred memory before deallocation -->
+  <policy domain="system" name="shred" value="1"/>
+  <policy domain="system" name="max-memory-request" value="512MiB"/>
+
+  <!-- Disable ALL delegates (blocks ImageTragick, Ghostscript, curl, wget) -->
+  <policy domain="delegate" rights="none" pattern="*"/>
+
+  <!-- Disable ALL filters -->
+  <policy domain="filter" rights="none" pattern="*"/>
+
+  <!-- Path restrictions (CVE-2022-44268, CVE-2016-5118) -->
+  <policy domain="path" rights="none" pattern="@*"/>
+  <policy domain="path" rights="none" pattern="-"/>
+  <policy domain="path" rights="none" pattern="fd:*"/>
+  <policy domain="path" rights="none" pattern="/etc/*"/>
+
+  <!-- Deny dangerous coders individually (IM6 does not support module deny+allow override) -->
+  <policy domain="coder" rights="none" pattern="URL"/>
+  <policy domain="coder" rights="none" pattern="HTTPS"/>
+  <policy domain="coder" rights="none" pattern="HTTP"/>
+  <policy domain="coder" rights="none" pattern="FTP"/>
+  <policy domain="coder" rights="none" pattern="MVG"/>
+  <policy domain="coder" rights="none" pattern="MSL"/>
+  <policy domain="coder" rights="none" pattern="TEXT"/>
+  <policy domain="coder" rights="none" pattern="LABEL"/>
+  <policy domain="coder" rights="none" pattern="EPHEMERAL"/>
+  <policy domain="coder" rights="none" pattern="SVG"/>
+  <policy domain="coder" rights="none" pattern="PS"/>
+  <policy domain="coder" rights="none" pattern="PS2"/>
+  <policy domain="coder" rights="none" pattern="PS3"/>
+  <policy domain="coder" rights="none" pattern="EPS"/>
+  <policy domain="coder" rights="none" pattern="XPS"/>
+  <policy domain="coder" rights="none" pattern="SHOW"/>
+</policymap>

@@ -1,0 +1,97 @@
+[Unit]
+Description=FileMagic File Conversion Service
+After=network.target
+
+[Service]
+Type=simple
+User=filemagic
+Group=filemagic
+WorkingDirectory=/opt/filemagic-back
+
+ExecStartPre=+/bin/mkdir -p /mnt/memdir/filemagic
+ExecStartPre=+/bin/chown filemagic:filemagic /mnt/memdir/filemagic
+ExecStart=/opt/filemagic-back/filemagic-back
+
+# Environment
+Environment=FILEMAGIC_USE_NSJAIL=true
+Environment=FILEMAGIC_LISTEN_ADDR=:8090
+Environment=FILEMAGIC_TMPFS_PATH=/mnt/memdir/filemagic
+Environment=FILEMAGIC_NSJAIL_CONFIG_DIR=/opt/filemagic-back/configs/nsjail
+Environment=FILEMAGIC_CORS_ORIGIN=https://filemagic.app
+EnvironmentFile=/etc/filemagic/env
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+
+# ---- cgroup v2 delegation for nsjail ----
+# Delegate specific controllers so nsjail can create sub-cgroups with
+# memory/PID/CPU limits. Combined with User=filemagic, systemd chowns the
+# cgroup subtree to the service user, allowing unprivileged cgroup management.
+Delegate=cpu memory pids
+
+# ---- Resource limits for the service itself ----
+MemoryMax=2G
+TasksMax=256
+CPUQuota=200%
+
+# ---- Filesystem hardening ----
+# Read-only root filesystem for the service
+ProtectSystem=strict
+ProtectHome=true
+# Allow writes to tmpfs and delegated cgroup subtree
+ReadWritePaths=/mnt/memdir /sys/fs/cgroup/system.slice/filemagic.service
+# Private /tmp not shared with other services
+PrivateTmp=true
+# No access to /dev except null, zero, urandom
+PrivateDevices=true
+
+# ---- Network hardening ----
+# Restrict address families (only inet for listening, netlink for nsjail)
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+# ---- AppArmor ----
+# Apply AppArmor profile at service start so the process (and its children)
+# have userns permission before NoNewPrivileges locks the profile.
+AppArmorProfile=filemagic-back
+
+# ---- Kernel hardening ----
+# Prevent loading kernel modules
+ProtectKernelModules=true
+# Prevent modifying kernel tunables
+ProtectKernelTunables=true
+# Prevent accessing kernel logs
+ProtectKernelLogs=true
+# Allow access to delegated cgroup subtree (required for nsjail cgroup limits)
+ProtectControlGroups=false
+# Prevent changing the clock
+ProtectClock=true
+# Hostname isolation provided by nsjail's own UTS namespace (clone_newuts).
+# ProtectHostname=true adds a seccomp filter blocking sethostname() even
+# inside nested UTS namespaces, which breaks nsjail's sandbox setup.
+ProtectHostname=false
+# No suid/sgid bits
+NoNewPrivileges=true
+# Memory execution policy
+MemoryDenyWriteExecute=false
+# Lock personality to Linux
+LockPersonality=true
+# Restrict realtime scheduling
+RestrictRealtime=true
+# Restrict kernel namespace creation (nsjail needs these)
+RestrictNamespaces=false
+# Remove ambient capabilities
+AmbientCapabilities=
+# Drop all capabilities except what nsjail needs
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_SETUID CAP_SETGID CAP_SYS_PTRACE
+
+# ---- Syscall filtering ----
+SystemCallArchitectures=native
+
+# ---- Logging ----
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=filemagic
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,57 @@
+/* Strict allowlist for Tesseract OCR — deny everything except what's needed */
+POLICY ocr_strict {
+  ALLOW {
+    /* Essential I/O */
+    read, write, pread64, pwrite64, readv, writev,
+    open, openat, openat2, close, lseek,
+
+    /* Stat operations */
+    newstat, newfstat, newlstat, newfstatat, statx,
+
+    /* Memory management (Tesseract + Leptonica are memory-intensive) */
+    mmap, munmap, mremap, mprotect, madvise, brk,
+
+    /* Process lifecycle */
+    clone, clone3, execve,
+    exit, exit_group, wait4, waitid,
+
+    /* Signal handling */
+    rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,
+    tgkill, tkill, rt_sigsuspend,
+
+    /* File operations */
+    access, faccessat, faccessat2, getcwd, fchdir,
+    dup, dup2, dup3, fcntl, ioctl, pipe, pipe2,
+    unlink, unlinkat, rename, renameat, renameat2,
+
+    /* Directory operations */
+    mkdir, mkdirat, getdents, getdents64,
+
+    /* Essential system info */
+    getuid, getgid, geteuid, getegid, getpid, getppid, gettid,
+    getrlimit, prlimit64, newuname, arch_prctl, set_tid_address,
+    prctl, capget,
+
+    /* Time operations */
+    clock_gettime, clock_getres, gettimeofday, nanosleep, clock_nanosleep,
+
+    /* Futex for threading (Tesseract uses OpenMP) */
+    futex, set_robust_list, get_robust_list,
+
+    /* File metadata */
+    readlink, readlinkat, lgetxattr, fgetxattr,
+
+    /* Polling/select */
+    poll, ppoll, select, pselect6,
+
+    /* Misc */
+    getrandom, umask, sched_yield, sched_getaffinity, rseq,
+
+    /* OpenMP thread management */
+    sched_setaffinity,
+
+    /* Socket info (glib probes fd type via getpeername) */
+    getpeername
+  }
+}
+USE ocr_strict DEFAULT KILL

@@ -1,0 +1,51 @@
+/* Strict allowlist for rsvg-convert (SVG → PNG) — profiled via strace -f -c */
+POLICY svg_strict {
+  ALLOW {
+    /* Essential I/O */
+    read, write, pread64, pwrite64,
+    openat, close, lseek,
+
+    /* Stat operations */
+    newfstat, newfstatat, statx, statfs,
+
+    /* Memory management */
+    mmap, munmap, mprotect, madvise, brk,
+
+    /* Process lifecycle */
+    execve, exit, exit_group,
+
+    /* Signal handling */
+    rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,
+
+    /* File operations */
+    access, faccessat, faccessat2, getcwd,
+    fcntl, ioctl,
+
+    /* Directory operations */
+    getdents64,
+
+    /* Essential system info */
+    getuid, getgid, geteuid, getegid, getpid, gettid,
+    prlimit64, arch_prctl, set_tid_address,
+    prctl, capget,
+
+    /* Time operations */
+    clock_gettime, clock_getres, gettimeofday,
+
+    /* Futex for threading (rsvg/cairo may use threads) */
+    futex, set_robust_list, get_robust_list,
+
+    /* File metadata */
+    readlink, readlinkat,
+
+    /* Polling (glib event loop) */
+    poll,
+
+    /* Misc */
+    getrandom, sched_getaffinity, sched_yield, rseq,
+
+    /* Socket info (glib probes fd type via getpeername) */
+    getpeername
+  }
+}
+USE svg_strict DEFAULT KILL

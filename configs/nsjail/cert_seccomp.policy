@@ -1,0 +1,60 @@
+/* Strict allowlist for OpenSSL certificate operations — deny everything except what's needed */
+POLICY cert_strict {
+  ALLOW {
+    /* Essential I/O */
+    read, write, pread64, pwrite64, readv, writev,
+    open, openat, openat2, close, lseek,
+
+    /* Stat operations */
+    newstat, newfstat, newlstat, newfstatat, statx,
+
+    /* Memory management */
+    mmap, munmap, mremap, mprotect, madvise, brk,
+
+    /* Process lifecycle */
+    clone, clone3, execve,
+    exit, exit_group, wait4, waitid,
+
+    /* Signal handling */
+    rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,
+    tgkill, tkill, rt_sigsuspend,
+
+    /* File operations */
+    access, faccessat, faccessat2, getcwd, fchdir,
+    dup, dup2, dup3, fcntl, ioctl, pipe, pipe2,
+    unlink, unlinkat,
+
+    /* Directory operations */
+    getdents, getdents64,
+
+    /* Essential system info */
+    getuid, getgid, geteuid, getegid, getpid, getppid, gettid,
+    getrlimit, prlimit64, newuname, arch_prctl, set_tid_address,
+    prctl, capget,
+
+    /* Time operations */
+    clock_gettime, clock_getres, gettimeofday, nanosleep, clock_nanosleep,
+
+    /* Futex for threading */
+    futex, set_robust_list, get_robust_list,
+
+    /* File metadata */
+    readlink, readlinkat, lgetxattr, fgetxattr,
+
+    /* Filesystem info */
+    statfs, fstatfs,
+
+    /* Polling/select */
+    poll, ppoll, select, pselect6,
+
+    /* Cryptographic randomness (essential for OpenSSL) */
+    getrandom,
+
+    /* Misc */
+    umask, sched_yield, sched_getaffinity, rseq,
+
+    /* Socket info (glib probes fd type via getpeername) */
+    getpeername
+  }
+}
+USE cert_strict DEFAULT KILL

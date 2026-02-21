@@ -1,0 +1,46 @@
+/* Strict allowlist for qpdf (PDF password/merge) — profiled via strace -f -c */
+POLICY qpdf_strict {
+  ALLOW {
+    /* Essential I/O */
+    read, write, pread64, pwrite64,
+    openat, close, lseek,
+
+    /* Stat operations */
+    newfstat, newfstatat,
+
+    /* Memory management */
+    mmap, munmap, mprotect, madvise, brk,
+
+    /* Process lifecycle */
+    execve, exit, exit_group,
+
+    /* Signal handling */
+    rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,
+
+    /* File operations */
+    access, faccessat, faccessat2, getcwd,
+    fcntl,
+    ftruncate,
+
+    /* Essential system info */
+    getuid, getgid, geteuid, getegid, getpid, gettid,
+    prlimit64, arch_prctl, set_tid_address,
+    prctl, capget,
+
+    /* Time operations */
+    clock_gettime, clock_getres, gettimeofday,
+
+    /* Futex for threading */
+    futex, set_robust_list, get_robust_list,
+
+    /* File metadata */
+    readlink, readlinkat,
+
+    /* Cryptographic randomness (needed for PDF encryption) */
+    getrandom,
+
+    /* Misc */
+    sched_getaffinity, sched_yield, rseq
+  }
+}
+USE qpdf_strict DEFAULT KILL

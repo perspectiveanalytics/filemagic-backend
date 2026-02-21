@@ -1,0 +1,91 @@
+/* Strict allowlist for Calibre ebook-convert (Python + Qt WebEngine) */
+POLICY ebook_strict {
+  ALLOW {
+    /* Essential I/O */
+    read, write, pread64, pwrite64, readv, writev,
+    openat, close, lseek, creat,
+
+    /* Stat operations */
+    newfstat, newfstatat, statx,
+
+    /* Memory management */
+    mmap, munmap, mprotect, madvise, brk,
+    mremap, memfd_create,
+
+    /* Process lifecycle */
+    execve, exit_group, exit,
+    clone, clone3, wait4, waitid,
+    kill,
+
+    /* Signal handling */
+    rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,
+    rt_sigtimedwait, tgkill,
+
+    /* File operations */
+    access, faccessat, faccessat2, getcwd,
+    dup, dup2, dup3, fcntl, ioctl,
+    unlink, unlinkat, link,
+    close_range,
+    rename, renameat, renameat2,
+    mkdir, mkdirat, rmdir,
+    ftruncate, fallocate,
+    symlink, symlinkat,
+    chdir, fchdir,
+    chmod, fchmod, fchmodat,
+    umask, statfs, fstatfs,
+    fadvise64,
+    pipe, pipe2,
+
+    /* Directory operations */
+    getdents64,
+
+    /* Essential system info */
+    getuid, getgid, geteuid, getegid, getpid, gettid, getppid,
+    getresuid, getresgid,
+    prlimit64, arch_prctl, set_tid_address,
+    prctl, capget, capset,
+    newuname, sysinfo,
+    setpriority, getpriority,
+
+    /* Time operations */
+    clock_gettime, clock_getres, gettimeofday, nanosleep,
+    clock_nanosleep,
+
+    /* Futex for threading */
+    futex, set_robust_list, get_robust_list,
+
+    /* File metadata */
+    readlink, readlinkat,
+    utimensat,
+
+    /* Polling */
+    epoll_create1, epoll_ctl, epoll_wait, epoll_pwait,
+    poll, ppoll, select,
+
+    /* File monitoring (QtWebEngine) */
+    inotify_init1, inotify_add_watch, inotify_rm_watch,
+
+    /* Misc */
+    getrandom, rseq, sched_getaffinity, sched_yield,
+    pkey_alloc,
+
+    /* Python faulthandler */
+    ptrace,
+
+    /* Socket (IPC between Qt WebEngine processes) */
+    socket, socketpair, connect, bind, listen, accept4,
+    getsockname, getpeername, getsockopt, setsockopt,
+    sendto, recvfrom, sendmsg, recvmsg, sendmmsg,
+    shutdown,
+
+    /* Event notification */
+    eventfd2,
+
+    /* Memory mapping for large files */
+    mlock, munlock,
+
+    /* Thread operations */
+    sched_setaffinity
+  }
+}
+USE ebook_strict DEFAULT KILL
