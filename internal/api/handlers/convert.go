@@ -60,11 +60,11 @@ const (
 	limitMarkdownPDF     int64 = 6 << 20   // UI: 5 MB
 	limitAudioExtract    int64 = 101 << 20 // UI: 100 MB
 	limitAudioConvert    int64 = 51 << 20  // UI: 50 MB
-	limitVideoCompress   int64 = 201 << 20 // UI: 200 MB
-	limitMovToMp4        int64 = 201 << 20 // UI: 200 MB
+	limitVideoCompress   int64 = 101 << 20 // UI: 100 MB
+	limitMovToMp4        int64 = 101 << 20 // UI: 100 MB
 	limitVideoToGif      int64 = 31 << 20  // UI: 30 MB
 	limitPDFPassword     int64 = 31 << 20  // UI: 30 MB
-	limitPDFEdit         int64 = 351 << 20 // UI: 350 MB
+	limitPDFEdit         int64 = 101 << 20 // UI: 100 MB
 	limitSvgToPng        int64 = 21 << 20  // UI: 20 MB (ImageConvert page)
 	limitPDFExtractImg   int64 = 31 << 20  // UI: 30 MB
 	limitDecompress      int64 = 51 << 20  // UI: 50 MB
