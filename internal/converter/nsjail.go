@@ -126,8 +126,7 @@ func (n *NsjailRunner) executeNsjail(ctx context.Context, command []string, jobD
 	args = append(args, jailCmd...)
 
 	cmd := exec.CommandContext(ctx, n.cfg.NsjailPath, args...)
-
-	// Sanitize environment — empty env inside jail
+	cmd.WaitDelay = 5 * time.Second
 	cmd.Env = []string{}
 
 	var stderr bytes.Buffer
@@ -139,7 +138,11 @@ func (n *NsjailRunner) executeNsjail(ctx context.Context, command []string, jobD
 		"timeout", timeout,
 	)
 
-	err = cmd.Run()
+	if err = cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start nsjail: %w", err)
+	}
+
+	err = waitOrKill(ctx, cmd, timeout)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return fmt.Errorf("conversion timed out after %v", timeout)
@@ -213,6 +216,7 @@ func (n *NsjailRunner) executeNsjailWithOutput(ctx context.Context, command []st
 	args = append(args, jailCmd...)
 
 	cmd := exec.CommandContext(ctx, n.cfg.NsjailPath, args...)
+	cmd.WaitDelay = 5 * time.Second
 	cmd.Env = []string{}
 
 	var stdout, stderr bytes.Buffer
@@ -225,7 +229,11 @@ func (n *NsjailRunner) executeNsjailWithOutput(ctx context.Context, command []st
 		"timeout", timeout,
 	)
 
-	err = cmd.Run()
+	if err = cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start nsjail: %w", err)
+	}
+
+	err = waitOrKill(ctx, cmd, timeout)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("conversion timed out after %v", timeout)
@@ -238,6 +246,39 @@ func (n *NsjailRunner) executeNsjailWithOutput(ctx context.Context, command []st
 	}
 
 	return stdout.Bytes(), nil
+}
+
+// waitOrKill waits for cmd to finish. If the context expires and cmd.Wait
+// does not return within a grace period, it sends SIGKILL directly to the
+// process to handle cases where the context-triggered kill fails to reap
+// a stuck nsjail (e.g. libheif thread deadlocks).
+func waitOrKill(ctx context.Context, cmd *exec.Cmd, timeout time.Duration) error {
+	const killGrace = 5 * time.Second
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		// Context expired (timeout or cancellation). cmd.Wait may already
+		// be returning because exec.CommandContext sends SIGKILL on cancel.
+		// Give it a moment before forcing a second kill.
+		select {
+		case err := <-done:
+			return err
+		case <-time.After(killGrace):
+			if cmd.Process != nil {
+				slog.Warn("nsjail did not exit after context cancel, sending SIGKILL",
+					"pid", cmd.Process.Pid,
+					"timeout", timeout,
+				)
+				cmd.Process.Kill()
+			}
+			return <-done
+		}
+	}
 }
 
 func PrepareJobDir(basePath, jobID string) (string, string, string, error) {
