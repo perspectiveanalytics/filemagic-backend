@@ -2,6 +2,7 @@ package response
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -50,6 +51,9 @@ func JSON(w http.ResponseWriter, status int, data any) {
 }
 
 func Error(w http.ResponseWriter, status int, code ErrorCode, message string) {
+	if status >= 400 && status < 500 {
+		slog.Info("rejected", "code", code, "status", status)
+	}
 	JSON(w, status, ErrorResponse{
 		Error: message,
 		Code:  code,

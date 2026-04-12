@@ -157,7 +157,10 @@ func (c *MetadataInspector) Type() queue.ConversionType {
 }
 
 func (c *MetadataInspector) Convert(ctx context.Context, job *queue.Job) error {
-	jobDir := filepath.Join(c.cfg.TmpfsPath, job.ID)
+	jobDir, _, _, err := PrepareJobDir(c.cfg.TmpfsPath, job.ID)
+	if err != nil {
+		return err
+	}
 
 	metadata, err := extractMetadata(ctx, c.runner, job.InputPath, jobDir)
 	if err != nil {
