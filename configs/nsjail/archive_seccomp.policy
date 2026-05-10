@@ -1,15 +1,14 @@
 /* Strict allowlist for 7z and tar archive operations — deny everything except what's needed */
 
-#define AF_UNIX      1
-#define EAFNOSUPPORT 97
+#define AF_UNIX 1
 
 POLICY archive_strict {
   /* glibc NSS only needs AF_UNIX (nscd). Any other family — AF_ALG,
      AF_NETLINK, AF_INET — gets EAFNOSUPPORT so NSS falls back to the
      next module instead of the process being killed. */
-  ERRNO(EAFNOSUPPORT) {
+  ERRNO(97) {  /* EAFNOSUPPORT */
     socket(family) { family != AF_UNIX }
-  }
+  },
   ALLOW {
     /* Essential I/O */
     read, write, pread64, pwrite64, readv, writev,

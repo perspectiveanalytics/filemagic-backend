@@ -1,16 +1,15 @@
 /* Strict allowlist for Calibre ebook-convert (Python + Qt WebEngine) */
 
-#define AF_UNIX      1
-#define EAFNOSUPPORT 97
+#define AF_UNIX 1
 
 POLICY ebook_strict {
   /* Only AF_UNIX is needed (Mojo IPC). Reject every other family — including
      AF_ALG, AF_NETLINK, AF_PACKET, AF_VSOCK — with EAFNOSUPPORT so callers
      fall back gracefully instead of being killed. */
-  ERRNO(EAFNOSUPPORT) {
+  ERRNO(97) {  /* EAFNOSUPPORT */
     socket(family)     { family != AF_UNIX },
     socketpair(family) { family != AF_UNIX }
-  }
+  },
   ALLOW {
     /* Essential I/O */
     read, write, pread64, pwrite64, readv, writev,
