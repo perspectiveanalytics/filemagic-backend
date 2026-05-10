@@ -1,5 +1,8 @@
 /* Strict allowlist for FFmpeg/FFprobe — deny everything except what's needed */
 POLICY ffmpeg_strict {
+  ERRNO(38) {  /* ENOSYS */
+    clone3
+  },
   ALLOW {
     /* Essential I/O */
     read, write, pread64, pwrite64, readv, writev,
@@ -15,8 +18,10 @@ POLICY ffmpeg_strict {
     /* Process lifecycle */
     execve, exit, exit_group,
 
-    /* Threading (FFmpeg uses libx264/libx265 thread pools via clone3) */
-    clone3, futex, set_robust_list, get_robust_list,
+    /* Threading (FFmpeg uses libx264/libx265 thread pools) */
+    /* clone: deny CLONE_NEWUSER|NEWNS|NEWNET|NEWPID|NEWUTS|NEWIPC|NEWCGROUP */
+    clone(cflags) { (cflags & 0x7e020000) == 0 },
+    futex, set_robust_list, get_robust_list,
 
     /* Signal handling */
     rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,

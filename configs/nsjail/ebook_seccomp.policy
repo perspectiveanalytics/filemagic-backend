@@ -3,12 +3,13 @@
 #define AF_UNIX 1
 
 POLICY ebook_strict {
-  /* Only AF_UNIX is needed (Mojo IPC). Reject every other family — including
-     AF_ALG, AF_NETLINK, AF_PACKET, AF_VSOCK — with EAFNOSUPPORT so callers
-     fall back gracefully instead of being killed. */
+  /* AF_UNIX only (Mojo IPC); AF_ALG/AF_NETLINK/AF_PACKET/AF_VSOCK -> EAFNOSUPPORT */
   ERRNO(97) {  /* EAFNOSUPPORT */
     socket(family)     { family != AF_UNIX },
     socketpair(family) { family != AF_UNIX }
+  },
+  ERRNO(38) {  /* ENOSYS */
+    clone3
   },
   ALLOW {
     /* Essential I/O */
@@ -24,8 +25,9 @@ POLICY ebook_strict {
 
     /* Process lifecycle */
     execve, exit_group, exit,
-    clone, clone3, wait4, waitid,
-    kill,
+    /* clone: deny CLONE_NEWUSER|NEWNS|NEWNET|NEWPID|NEWUTS|NEWIPC|NEWCGROUP */
+    clone(cflags) { (cflags & 0x7e020000) == 0 },
+    wait4, waitid, kill,
 
     /* Signal handling */
     rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,

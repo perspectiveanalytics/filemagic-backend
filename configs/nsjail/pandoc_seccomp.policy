@@ -1,5 +1,8 @@
 /* Strict allowlist for pandoc + typst — profiled via strace -f -c */
 POLICY pandoc_strict {
+  ERRNO(38) {  /* ENOSYS */
+    clone3
+  },
   ALLOW {
     /* Essential I/O */
     read, write, pread64, pwrite64, readv, writev,
@@ -13,7 +16,9 @@ POLICY pandoc_strict {
     memfd_create,
 
     /* Process lifecycle (pandoc spawns typst as subprocess) */
-    clone, execve,
+    execve,
+    /* clone: deny CLONE_NEWUSER|NEWNS|NEWNET|NEWPID|NEWUTS|NEWIPC|NEWCGROUP */
+    clone(cflags) { (cflags & 0x7e020000) == 0 },
     exit, exit_group, wait4,
 
     /* Signal handling */
