@@ -46,10 +46,7 @@ POLICY font_strict {
     epoll_create1, epoll_ctl, epoll_wait, epoll_pwait,
 
     /* Misc */
-    getrandom, rseq, sched_getaffinity, sched_yield,
-
-    /* Python faulthandler */
-    ptrace
+    getrandom, rseq, sched_getaffinity, sched_yield
   }
 }
 USE font_strict DEFAULT KILL

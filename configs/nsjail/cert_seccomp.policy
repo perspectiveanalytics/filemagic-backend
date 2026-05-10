@@ -12,8 +12,7 @@ POLICY cert_strict {
     mmap, munmap, mremap, mprotect, madvise, brk,
 
     /* Process lifecycle */
-    clone, clone3, execve,
-    exit, exit_group, wait4, waitid,
+    execve, exit, exit_group,
 
     /* Signal handling */
     rt_sigaction, rt_sigprocmask, rt_sigreturn, sigaltstack,

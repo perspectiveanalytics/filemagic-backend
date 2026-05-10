@@ -44,10 +44,7 @@ POLICY pymupdf_strict {
     epoll_create1, epoll_ctl, epoll_wait, epoll_pwait,
 
     /* Misc */
-    getrandom, rseq, sched_getaffinity, sched_yield,
-
-    /* Python faulthandler probes ptrace(TRACEME) at startup — harmless in sandbox */
-    ptrace
+    getrandom, rseq, sched_getaffinity, sched_yield
   }
 }
 USE pymupdf_strict DEFAULT KILL

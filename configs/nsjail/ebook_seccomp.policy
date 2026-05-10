@@ -53,7 +53,7 @@ POLICY ebook_strict {
     getuid, getgid, geteuid, getegid, getpid, gettid, getppid,
     getresuid, getresgid,
     prlimit64, arch_prctl, set_tid_address,
-    prctl, capget, capset,
+    prctl, capget,
     newuname, sysinfo,
     setpriority, getpriority,
 
@@ -78,9 +78,6 @@ POLICY ebook_strict {
     /* Misc */
     getrandom, rseq, sched_getaffinity, sched_yield,
     pkey_alloc,
-
-    /* Python faulthandler */
-    ptrace,
 
     /* Socket (IPC between Qt WebEngine processes) */
     socket, socketpair, connect, bind, listen, accept4,
