@@ -312,7 +312,9 @@ func ValidateForAudioExtract(fileType FileType) bool {
 
 func ValidateForAudioConvert(fileType FileType) bool {
 	switch fileType {
-	case FileTypeMP3, FileTypeWAV, FileTypeFLAC, FileTypeM4A:
+	// MP4: AAC .m4a files often carry a generic mp4 ftyp brand (mp42/isom) and
+	// are detected as MP4; ffmpeg transcodes their audio stream all the same.
+	case FileTypeMP3, FileTypeWAV, FileTypeFLAC, FileTypeM4A, FileTypeMP4:
 		return true
 	default:
 		return false

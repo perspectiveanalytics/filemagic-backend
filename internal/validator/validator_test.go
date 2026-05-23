@@ -566,13 +566,13 @@ func TestValidateForAudioExtract(t *testing.T) {
 }
 
 func TestValidateForAudioConvert(t *testing.T) {
-	valid := []FileType{FileTypeMP3, FileTypeWAV, FileTypeFLAC, FileTypeM4A}
+	valid := []FileType{FileTypeMP3, FileTypeWAV, FileTypeFLAC, FileTypeM4A, FileTypeMP4}
 	for _, ft := range valid {
 		if !ValidateForAudioConvert(ft) {
 			t.Errorf("expected %s to be valid for audio conversion", ft)
 		}
 	}
-	invalid := []FileType{FileTypeMP4, FileTypePDF, FileTypePNG, FileTypeAVI}
+	invalid := []FileType{FileTypePDF, FileTypePNG, FileTypeAVI}
 	for _, ft := range invalid {
 		if ValidateForAudioConvert(ft) {
 			t.Errorf("expected %s to be invalid for audio conversion", ft)
