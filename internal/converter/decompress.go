@@ -213,6 +213,10 @@ func validate7zListing(out []byte, maxFiles int, maxTotalSize int64) error {
 			current.hasSize = true
 		case "Folder":
 			current.isDir = value == "+"
+		case "Attributes":
+			if archiveAttributesIsDir(value) {
+				current.isDir = true
+			}
 		}
 	}
 
@@ -223,6 +227,11 @@ func validate7zListing(out []byte, maxFiles int, maxTotalSize int64) error {
 		return fmt.Errorf("archive is empty")
 	}
 	return nil
+}
+
+func archiveAttributesIsDir(value string) bool {
+	value = strings.TrimSpace(value)
+	return value != "" && value[0] == 'D'
 }
 
 func validateArchiveEntryPath(name string) error {

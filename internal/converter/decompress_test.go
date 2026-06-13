@@ -24,6 +24,27 @@ Size = 0
 	}
 }
 
+func TestValidate7zListingAccepts7zDirectoryWithoutFolderField(t *testing.T) {
+	listing := []byte(`
+Path = archive.7z
+Type = 7z
+
+----------
+Path = dir
+Size = 0
+Packed Size = 0
+Attributes = D drwxr-xr-x
+
+Path = dir/file.txt
+Size = 1
+Packed Size = 5
+Attributes = A -rw-r--r--
+`)
+	if err := validate7zListing(listing, 1, 1024); err != nil {
+		t.Fatalf("expected 7z directory to be ignored for file count: %v", err)
+	}
+}
+
 func TestValidate7zListingRejectsTraversal(t *testing.T) {
 	listing := []byte(`
 ----------
