@@ -18,6 +18,12 @@ type NsjailRunner struct {
 	cfg *config.Config
 }
 
+const (
+	defaultNsjailStdoutBytes = 1 << 20  // 1 MB for probes such as ffprobe and vipsheader
+	largeNsjailStdoutBytes   = 4 << 20  // 4 MB for bounded listings and metadata JSON
+	maxNsjailStderrBytes     = 64 << 10 // 64 KB
+)
+
 // requiredConfigs lists every nsjail profile the converters depend on.
 // Each entry must have a matching _seccomp.policy file.
 var requiredConfigs = []string{
@@ -129,8 +135,8 @@ func (n *NsjailRunner) executeNsjail(ctx context.Context, command []string, jobD
 	cmd.WaitDelay = 5 * time.Second
 	cmd.Env = []string{}
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderr := newLimitedBuffer(maxNsjailStderrBytes)
+	cmd.Stderr = stderr
 
 	slog.Info("executing nsjail",
 		"config", configFile,
@@ -219,9 +225,11 @@ func (n *NsjailRunner) executeNsjailWithOutput(ctx context.Context, command []st
 	cmd.WaitDelay = 5 * time.Second
 	cmd.Env = []string{}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdoutLimit := stdoutLimitForConfig(configFile)
+	stdout := newLimitedBuffer(stdoutLimit)
+	stderr := newLimitedBuffer(maxNsjailStderrBytes)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	slog.Info("executing nsjail (with output)",
 		"config", configFile,
@@ -245,7 +253,64 @@ func (n *NsjailRunner) executeNsjailWithOutput(ctx context.Context, command []st
 		return nil, fmt.Errorf("conversion failed: %w", err)
 	}
 
+	if stdout.Truncated() {
+		return nil, fmt.Errorf("conversion output exceeded %d bytes", stdoutLimit)
+	}
+
 	return stdout.Bytes(), nil
+}
+
+func stdoutLimitForConfig(configFile string) int {
+	switch configFile {
+	case "archive.cfg", "metadata.cfg":
+		return largeNsjailStdoutBytes
+	default:
+		return defaultNsjailStdoutBytes
+	}
+}
+
+type limitedBuffer struct {
+	buf       bytes.Buffer
+	limit     int
+	truncated bool
+}
+
+func newLimitedBuffer(limit int) *limitedBuffer {
+	return &limitedBuffer{limit: limit}
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	if b.limit <= 0 {
+		b.truncated = true
+		return len(p), nil
+	}
+	remaining := b.limit - b.buf.Len()
+	if remaining > 0 {
+		if len(p) > remaining {
+			b.buf.Write(p[:remaining])
+			b.truncated = true
+		} else {
+			b.buf.Write(p)
+		}
+	} else {
+		b.truncated = true
+	}
+	return len(p), nil
+}
+
+func (b *limitedBuffer) String() string {
+	if b.truncated {
+		return b.buf.String() + "\n[truncated]"
+	}
+	return b.buf.String()
+}
+
+func (b *limitedBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
+
+func (b *limitedBuffer) Truncated() bool {
+	return b.truncated
 }
 
 // waitOrKill waits for cmd to finish. If the context expires and cmd.Wait
@@ -306,6 +371,7 @@ func CleanupJobDir(basePath, jobID string) error {
 func redactCommand(cmd []string) []string {
 	redacted := make([]string, len(cmd))
 	copy(redacted, cmd)
+	is7z := len(cmd) > 0 && filepath.Base(cmd[0]) == "7z"
 	skipNext := 0
 	for i, arg := range redacted {
 		if skipNext > 0 {
@@ -314,7 +380,7 @@ func redactCommand(cmd []string) []string {
 			continue
 		}
 		// 7z: -p<password> (always concatenated, len > 2 distinguishes from bare -p)
-		if strings.HasPrefix(arg, "-p") && len(arg) > 2 && arg[2] != '-' {
+		if is7z && strings.HasPrefix(arg, "-p") && len(arg) > 2 && arg[2] != '-' {
 			redacted[i] = "-p[REDACTED]"
 		}
 		// qpdf: --password=<value>

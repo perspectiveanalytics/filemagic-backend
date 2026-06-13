@@ -46,6 +46,9 @@ func (c *FaviconGenerator) Convert(ctx context.Context, job *queue.Job) error {
 	}
 
 	inputFile := job.InputPath
+	if err := ValidateImageDimensions(ctx, c.runner, inputFile, jobDir, "image.cfg"); err != nil {
+		return err
+	}
 
 	// Step 1: Convert input to intermediate PNG via vips
 	intermediatePng := filepath.Join(outputDir, "intermediate.png")

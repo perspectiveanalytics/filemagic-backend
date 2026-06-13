@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"net"
 
@@ -55,23 +57,23 @@ const (
 	limitOCR           int64 = 6 << 20   // UI: 5 MB
 	limitMetadata      int64 = 16 << 20  // UI: 15 MB
 	limitCertConvert   int64 = 2 << 20   // UI: 1 MB
-	limitMergePerFile    int64 = 9 << 20   // UI: 8 MB per file
-	limitArchiveFile     int64 = 36 << 20  // UI: 35 MB per file
-	limitMarkdownPDF     int64 = 6 << 20   // UI: 5 MB
-	limitAudioExtract    int64 = 101 << 20 // UI: 100 MB
-	limitAudioConvert    int64 = 51 << 20  // UI: 50 MB
-	limitVideoCompress   int64 = 101 << 20 // UI: 100 MB
-	limitMovToMp4        int64 = 101 << 20 // UI: 100 MB
-	limitVideoToGif      int64 = 31 << 20  // UI: 30 MB
-	limitPDFPassword     int64 = 31 << 20  // UI: 30 MB
-	limitPDFEdit         int64 = 101 << 20 // UI: 100 MB
-	limitSvgToPng        int64 = 21 << 20  // UI: 20 MB (ImageConvert page)
-	limitPDFExtractImg   int64 = 31 << 20  // UI: 30 MB
-	limitDecompress      int64 = 51 << 20  // UI: 50 MB
-	limitFavicon         int64 = 21 << 20  // UI: 20 MB (ImageConvert page)
-	limitFontConvert     int64 = 11 << 20  // UI: 10 MB
-	limitPDFRepair       int64 = 21 << 20  // UI: 20 MB
-	limitEbookConvert    int64 = 51 << 20  // UI: 50 MB
+	limitMergePerFile  int64 = 9 << 20   // UI: 8 MB per file
+	limitArchiveFile   int64 = 36 << 20  // UI: 35 MB per file
+	limitMarkdownPDF   int64 = 6 << 20   // UI: 5 MB
+	limitAudioExtract  int64 = 101 << 20 // UI: 100 MB
+	limitAudioConvert  int64 = 51 << 20  // UI: 50 MB
+	limitVideoCompress int64 = 101 << 20 // UI: 100 MB
+	limitMovToMp4      int64 = 101 << 20 // UI: 100 MB
+	limitVideoToGif    int64 = 31 << 20  // UI: 30 MB
+	limitPDFPassword   int64 = 31 << 20  // UI: 30 MB
+	limitPDFEdit       int64 = 101 << 20 // UI: 100 MB
+	limitSvgToPng      int64 = 21 << 20  // UI: 20 MB (ImageConvert page)
+	limitPDFExtractImg int64 = 31 << 20  // UI: 30 MB
+	limitDecompress    int64 = 51 << 20  // UI: 50 MB
+	limitFavicon       int64 = 21 << 20  // UI: 20 MB (ImageConvert page)
+	limitFontConvert   int64 = 11 << 20  // UI: 10 MB
+	limitPDFRepair     int64 = 21 << 20  // UI: 20 MB
+	limitEbookConvert  int64 = 51 << 20  // UI: 50 MB
 
 	maxMergeFileCount   = 10
 	maxArchiveFileCount = 3
@@ -158,7 +160,7 @@ func (h *ConvertHandler) PDFRepair(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConvertHandler) FontConvert(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(limitFontConvert); err != nil {
+	if err := parseMultipartFormLimited(w, r, limitFontConvert); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "file too large or invalid form data")
 		return
 	}
@@ -247,7 +249,7 @@ func (h *ConvertHandler) FontConvert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConvertHandler) EbookConvert(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(limitEbookConvert); err != nil {
+	if err := parseMultipartFormLimited(w, r, limitEbookConvert); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "file too large or invalid form data")
 		return
 	}
@@ -339,7 +341,7 @@ func (h *ConvertHandler) EbookConvert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConvertHandler) SvgToPng(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(limitSvgToPng); err != nil {
+	if err := parseMultipartFormLimited(w, r, limitSvgToPng); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "file too large or invalid form data")
 		return
 	}
@@ -421,7 +423,7 @@ func (h *ConvertHandler) SvgToPng(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConvertHandler) Decompress(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(limitDecompress); err != nil {
+	if err := parseMultipartFormLimited(w, r, limitDecompress); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "file too large or invalid form data")
 		return
 	}
@@ -498,7 +500,7 @@ func (h *ConvertHandler) Decompress(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConvertHandler) MarkdownPDF(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(limitMarkdownPDF); err != nil {
+	if err := parseMultipartFormLimited(w, r, limitMarkdownPDF); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "file too large or invalid form data")
 		return
 	}
@@ -592,7 +594,7 @@ func (h *ConvertHandler) handleConversion(
 	validateFunc func(validator.FileType) bool,
 	maxFileSize int64,
 ) {
-	if err := r.ParseMultipartForm(maxFileSize); err != nil {
+	if err := parseMultipartFormLimited(w, r, maxFileSize); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "file too large or invalid form data")
 		return
 	}
@@ -700,7 +702,7 @@ func (h *ConvertHandler) handleMergeConversion(
 	maxPerFile int64,
 	maxFiles int,
 ) {
-	if err := r.ParseMultipartForm(maxPerFile * int64(maxFiles)); err != nil {
+	if err := parseMultipartFormLimited(w, r, maxPerFile*int64(maxFiles)); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "files too large or invalid form data")
 		return
 	}
@@ -826,7 +828,7 @@ func (h *ConvertHandler) handleCertConversion(
 	r *http.Request,
 	convType queue.ConversionType,
 ) {
-	if err := r.ParseMultipartForm(limitCertConvert); err != nil {
+	if err := parseMultipartFormLimited(w, r, limitCertConvert); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "file too large or invalid form data")
 		return
 	}
@@ -934,7 +936,7 @@ func (h *ConvertHandler) handleArchiveConversion(
 	r *http.Request,
 	convType queue.ConversionType,
 ) {
-	if err := r.ParseMultipartForm(limitArchiveFile * int64(maxArchiveFileCount)); err != nil {
+	if err := parseMultipartFormLimited(w, r, limitArchiveFile*int64(maxArchiveFileCount)); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "files too large or invalid form data")
 		return
 	}
@@ -1167,20 +1169,13 @@ func (h *ConvertHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := os.Open(job.OutputPath)
+	file, stat, err := openRegularFileNoFollow(job.OutputPath)
 	if err != nil {
 		slog.Error("failed to open output file", "error", err, "jobId", jobID)
 		response.Error(w, http.StatusInternalServerError, response.CodeInternalError, "failed to retrieve file")
 		return
 	}
 	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		slog.Error("failed to stat output file", "error", err, "jobId", jobID)
-		response.Error(w, http.StatusInternalServerError, response.CodeInternalError, "failed to retrieve file")
-		return
-	}
 
 	ext := strings.ToLower(filepath.Ext(job.OutputPath))
 	contentType := mime.TypeByExtension(ext)
@@ -1251,18 +1246,7 @@ func (h *ConvertHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filesRaw, ok := job.Metadata["files"].([]map[string]any)
-	if !ok {
-		// Try []any (JSON round-trip may produce this)
-		if filesAny, ok2 := job.Metadata["files"].([]any); ok2 {
-			filesRaw = make([]map[string]any, len(filesAny))
-			for i, f := range filesAny {
-				if m, ok3 := f.(map[string]any); ok3 {
-					filesRaw[i] = m
-				}
-			}
-		}
-	}
+	filesRaw := outputFilesFromMetadata(job.Metadata)
 
 	if idx >= len(filesRaw) {
 		response.Error(w, http.StatusNotFound, response.CodeNotFound, "file index out of range")
@@ -1276,28 +1260,12 @@ func (h *ConvertHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := filepath.Join(job.OutputPath, name)
-
-	// Security: ensure resolved path stays within outputDir
-	absPath, _ := filepath.Abs(filePath)
-	absOutput, _ := filepath.Abs(job.OutputPath)
-	if !strings.HasPrefix(absPath, absOutput+string(filepath.Separator)) && absPath != absOutput {
-		response.Error(w, http.StatusBadRequest, response.CodeValidationError, "invalid file path")
-		return
-	}
-
-	file, err := os.Open(filePath)
+	file, stat, err := openRegularFileUnderDir(job.OutputPath, name)
 	if err != nil {
-		response.Error(w, http.StatusNotFound, response.CodeNotFound, "file not found")
+		respondDownloadOpenError(w, err)
 		return
 	}
 	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, response.CodeInternalError, "failed to read file")
-		return
-	}
 
 	ext := strings.ToLower(filepath.Ext(name))
 	contentType := mime.TypeByExtension(ext)
@@ -1332,21 +1300,34 @@ func (h *ConvertHandler) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !job.MarkDownloaded() {
-		response.Error(w, http.StatusGone, response.CodeNotFound, "file already downloaded")
+	filesRaw := outputFilesFromMetadata(job.Metadata)
+	if len(filesRaw) == 0 {
+		slog.Error("missing output file manifest", "jobId", jobID)
+		response.Error(w, http.StatusInternalServerError, response.CodeInternalError, "failed to prepare download")
 		return
 	}
 
-	filesRaw, ok := job.Metadata["files"].([]map[string]any)
-	if !ok {
-		if filesAny, ok2 := job.Metadata["files"].([]any); ok2 {
-			filesRaw = make([]map[string]any, len(filesAny))
-			for i, f := range filesAny {
-				if m, ok3 := f.(map[string]any); ok3 {
-					filesRaw[i] = m
-				}
-			}
+	names := make([]string, 0, len(filesRaw))
+	for _, entry := range filesRaw {
+		name, _ := entry["name"].(string)
+		if name == "" {
+			slog.Error("invalid output file manifest entry", "jobId", jobID, "entry", entry)
+			response.Error(w, http.StatusInternalServerError, response.CodeInternalError, "failed to prepare download")
+			return
 		}
+		file, _, err := openRegularFileUnderDir(job.OutputPath, name)
+		if err != nil {
+			slog.Error("invalid output file manifest path", "jobId", jobID, "name", name, "error", err)
+			respondDownloadOpenError(w, err)
+			return
+		}
+		file.Close()
+		names = append(names, name)
+	}
+
+	if !job.MarkDownloaded() {
+		response.Error(w, http.StatusGone, response.CodeNotFound, "file already downloaded")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
@@ -1357,26 +1338,14 @@ func (h *ConvertHandler) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	zipWriter := zip.NewWriter(w)
 	defer zipWriter.Close()
 
-	for _, entry := range filesRaw {
-		name, _ := entry["name"].(string)
-		if name == "" {
-			continue
-		}
-
-		filePath := filepath.Join(job.OutputPath, name)
-
-		absPath, _ := filepath.Abs(filePath)
-		absOutput, _ := filepath.Abs(job.OutputPath)
-		if !strings.HasPrefix(absPath, absOutput+string(filepath.Separator)) {
-			continue
-		}
-
-		file, err := os.Open(filePath)
+	for _, name := range names {
+		file, _, err := openRegularFileUnderDir(job.OutputPath, name)
 		if err != nil {
-			continue
+			slog.Error("failed to reopen output file for zip", "jobId", jobID, "name", name, "error", err)
+			return
 		}
 
-		zw, err := zipWriter.Create(name)
+		zw, err := zipWriter.Create(filepath.ToSlash(filepath.Clean(name)))
 		if err != nil {
 			file.Close()
 			continue
@@ -1398,4 +1367,123 @@ func (h *ConvertHandler) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		h.queue.DeleteJob(jobID)
 		slog.Info("job cleaned up after zip download", "jobId", jobID)
 	}()
+}
+
+var (
+	errInvalidOutputPath = errors.New("invalid output file path")
+	errOutputFileMissing = errors.New("output file missing")
+)
+
+func outputFilesFromMetadata(metadata map[string]any) []map[string]any {
+	filesRaw, ok := metadata["files"].([]map[string]any)
+	if ok {
+		return filesRaw
+	}
+	filesAny, ok := metadata["files"].([]any)
+	if !ok {
+		return nil
+	}
+	filesRaw = make([]map[string]any, 0, len(filesAny))
+	for _, f := range filesAny {
+		if m, ok := f.(map[string]any); ok {
+			filesRaw = append(filesRaw, m)
+		}
+	}
+	return filesRaw
+}
+
+func respondDownloadOpenError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, errOutputFileMissing), os.IsNotExist(err):
+		response.Error(w, http.StatusNotFound, response.CodeNotFound, "file not found")
+	case errors.Is(err, errInvalidOutputPath):
+		response.Error(w, http.StatusBadRequest, response.CodeValidationError, "invalid file path")
+	default:
+		response.Error(w, http.StatusInternalServerError, response.CodeInternalError, "failed to read file")
+	}
+}
+
+func openRegularFileNoFollow(path string) (*os.File, os.FileInfo, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, nil, errInvalidOutputPath
+	}
+	if !info.Mode().IsRegular() {
+		return nil, nil, errInvalidOutputPath
+	}
+
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	stat, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, nil, err
+	}
+	if !stat.Mode().IsRegular() {
+		file.Close()
+		return nil, nil, errInvalidOutputPath
+	}
+	return file, stat, nil
+}
+
+func openRegularFileUnderDir(baseDir, name string) (*os.File, os.FileInfo, error) {
+	if name == "" || filepath.IsAbs(name) || strings.ContainsAny(name, "\x00\\") || hasUnsafePathSegment(name) {
+		return nil, nil, errInvalidOutputPath
+	}
+
+	cleanName := filepath.Clean(name)
+	if cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
+		return nil, nil, errInvalidOutputPath
+	}
+
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	absPath, err := filepath.Abs(filepath.Join(absBase, cleanName))
+	if err != nil {
+		return nil, nil, err
+	}
+	if !pathWithinBase(absBase, absPath) {
+		return nil, nil, errInvalidOutputPath
+	}
+
+	resolvedBase, err := filepath.EvalSymlinks(absBase)
+	if err != nil {
+		return nil, nil, err
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, errOutputFileMissing
+		}
+		return nil, nil, err
+	}
+	if !pathWithinBase(resolvedBase, resolvedPath) {
+		return nil, nil, errInvalidOutputPath
+	}
+
+	return openRegularFileNoFollow(absPath)
+}
+
+func hasUnsafePathSegment(name string) bool {
+	for _, part := range strings.Split(name, "/") {
+		if part == "." || part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func pathWithinBase(base, candidate string) bool {
+	rel, err := filepath.Rel(base, candidate)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }

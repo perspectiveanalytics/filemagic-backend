@@ -55,6 +55,11 @@ func (c *OCRConverter) Convert(ctx context.Context, job *queue.Job) error {
 
 	inputFile := job.InputPath
 	ext := strings.ToLower(filepath.Ext(inputFile))
+	if ext != ".pdf" {
+		if err := ValidateImageDimensions(ctx, c.runner, inputFile, jobDir, "image.cfg"); err != nil {
+			return err
+		}
+	}
 
 	// Preprocess if Tesseract can't read the format directly.
 	// Preprocessed files go to outputDir (input is read-only in nsjail).

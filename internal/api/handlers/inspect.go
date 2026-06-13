@@ -27,7 +27,7 @@ func NewInspectHandler(cfg *config.Config) *InspectHandler {
 }
 
 func (h *InspectHandler) Certificate(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(maxCertFileSize); err != nil {
+	if err := parseMultipartFormLimited(w, r, maxCertFileSize); err != nil {
 		response.Error(w, http.StatusBadRequest, response.CodeFileTooLarge, "file too large or invalid form data")
 		return
 	}

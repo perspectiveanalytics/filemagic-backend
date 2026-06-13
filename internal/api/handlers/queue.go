@@ -24,7 +24,13 @@ func userFacingError(err string) string {
 		"output file too large",
 		"generated gif is too large",
 		"too many files",
+		"archive contains more than",
 		"decompressed size exceeds",
+		"decompressed content exceeds",
+		"failed to validate image dimensions",
+		"failed to parse image dimensions",
+		"image dimensions",
+		"image pixel count",
 	}
 	lower := strings.ToLower(err)
 	for _, msg := range safeMessages {

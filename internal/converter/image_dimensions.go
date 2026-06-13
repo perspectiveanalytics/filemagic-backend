@@ -25,33 +25,18 @@ const (
 //
 // Must be called AFTER PrepareJobDir but BEFORE the actual conversion.
 func ValidateImageDimensions(ctx context.Context, runner *NsjailRunner, inputFile, jobDir, nsjailCfg string) error {
-	wBytes, err := runner.RunWithOutput(ctx,
-		[]string{"/usr/bin/vipsheader", "-f", "width", inputFile},
+	dimBytes, err := runner.RunWithOutput(ctx,
+		[]string{"/usr/bin/vipsheader", "-f", "width", "-f", "height", inputFile},
 		jobDir, nsjailCfg, 10*time.Second)
 	if err != nil {
-		// If vipsheader fails, the image is likely corrupted — let the
-		// converter handle it (it will fail with a better error message).
-		slog.Warn("vipsheader width check failed, skipping dimension validation",
+		slog.Warn("vipsheader dimension check failed",
 			"error", err, "input", inputFile)
-		return nil
+		return fmt.Errorf("failed to validate image dimensions")
 	}
 
-	hBytes, err := runner.RunWithOutput(ctx,
-		[]string{"/usr/bin/vipsheader", "-f", "height", inputFile},
-		jobDir, nsjailCfg, 10*time.Second)
-	if err != nil {
-		slog.Warn("vipsheader height check failed, skipping dimension validation",
-			"error", err, "input", inputFile)
-		return nil
-	}
-
-	var width, height int
-	fmt.Sscanf(strings.TrimSpace(string(wBytes)), "%d", &width)
-	fmt.Sscanf(strings.TrimSpace(string(hBytes)), "%d", &height)
-
+	width, height := parseVipsDimensions(dimBytes)
 	if width <= 0 || height <= 0 {
-		// Could not parse dimensions — let the converter handle it
-		return nil
+		return fmt.Errorf("failed to parse image dimensions")
 	}
 
 	slog.Info("image dimension check", "width", width, "height", height,
@@ -68,4 +53,10 @@ func ValidateImageDimensions(ctx context.Context, runner *NsjailRunner, inputFil
 	}
 
 	return nil
+}
+
+func parseVipsDimensions(out []byte) (int, int) {
+	var width, height int
+	fmt.Fscan(strings.NewReader(strings.TrimSpace(string(out))), &width, &height)
+	return width, height
 }
