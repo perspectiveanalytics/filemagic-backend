@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -36,7 +37,13 @@ func ValidateImageDimensions(ctx context.Context, runner *NsjailRunner, inputFil
 
 	width, height := parseVipsDimensions(dimBytes)
 	if width <= 0 || height <= 0 {
-		return fmt.Errorf("failed to parse image dimensions")
+		width, height, err = readVipsDimensionsSeparately(ctx, runner, inputFile, jobDir, nsjailCfg)
+		if err != nil {
+			return err
+		}
+		if width <= 0 || height <= 0 {
+			return fmt.Errorf("failed to parse image dimensions")
+		}
 	}
 
 	slog.Info("image dimension check", "width", width, "height", height,
@@ -55,8 +62,43 @@ func ValidateImageDimensions(ctx context.Context, runner *NsjailRunner, inputFil
 	return nil
 }
 
+func readVipsDimensionsSeparately(ctx context.Context, runner *NsjailRunner, inputFile, jobDir, nsjailCfg string) (int, int, error) {
+	width, err := readVipsDimensionField(ctx, runner, inputFile, jobDir, nsjailCfg, "width")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	height, err := readVipsDimensionField(ctx, runner, inputFile, jobDir, nsjailCfg, "height")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return width, height, nil
+}
+
+func readVipsDimensionField(ctx context.Context, runner *NsjailRunner, inputFile, jobDir, nsjailCfg, field string) (int, error) {
+	out, err := runner.RunWithOutput(ctx,
+		[]string{"/usr/bin/vipsheader", "-f", field, inputFile},
+		jobDir, nsjailCfg, 10*time.Second)
+	if err != nil {
+		slog.Warn("vipsheader dimension field check failed",
+			"field", field, "error", err, "input", inputFile)
+		return 0, fmt.Errorf("failed to validate image dimensions")
+	}
+
+	return parseVipsDimensionField(out), nil
+}
+
 func parseVipsDimensions(out []byte) (int, int) {
 	var width, height int
 	fmt.Fscan(strings.NewReader(strings.TrimSpace(string(out))), &width, &height)
 	return width, height
+}
+
+func parseVipsDimensionField(out []byte) int {
+	value, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0
+	}
+	return value
 }
