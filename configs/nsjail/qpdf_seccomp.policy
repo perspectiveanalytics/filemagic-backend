@@ -9,7 +9,7 @@ POLICY qpdf_strict {
     newfstat, newfstatat,
 
     /* Memory management */
-    mmap, munmap, mprotect, madvise, brk,
+    mmap, munmap, mremap, mprotect, madvise, brk,
 
     /* Process lifecycle */
     execve, exit, exit_group,

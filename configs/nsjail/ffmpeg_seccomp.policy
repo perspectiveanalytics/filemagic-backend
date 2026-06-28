@@ -12,7 +12,7 @@ POLICY ffmpeg_strict {
     newfstat, newfstatat, statfs,
 
     /* Memory management */
-    mmap, munmap, mprotect, madvise, brk, mlock,
+    mmap, munmap, mremap, mprotect, madvise, brk, mlock,
     get_mempolicy,
 
     /* Process lifecycle */

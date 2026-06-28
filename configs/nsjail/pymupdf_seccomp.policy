@@ -9,7 +9,7 @@ POLICY pymupdf_strict {
     newfstat, newfstatat, statx,
 
     /* Memory management */
-    mmap, munmap, mprotect, madvise, brk,
+    mmap, munmap, mremap, mprotect, madvise, brk,
 
     /* Process lifecycle (execve for initial python3 exec, exit_group to terminate) */
     execve, exit_group,
