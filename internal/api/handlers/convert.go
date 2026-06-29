@@ -1163,12 +1163,6 @@ func (h *ConvertHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Atomic CAS prevents double-download race (concurrent requests)
-	if !job.MarkDownloaded() {
-		response.Error(w, http.StatusGone, response.CodeNotFound, "file already downloaded")
-		return
-	}
-
 	file, stat, err := openRegularFileNoFollow(job.OutputPath)
 	if err != nil {
 		slog.Error("failed to open output file", "error", err, "jobId", jobID)
@@ -1176,6 +1170,12 @@ func (h *ConvertHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+
+	// Atomic CAS prevents double-download race (concurrent requests)
+	if !job.MarkDownloaded() {
+		response.Error(w, http.StatusGone, response.CodeNotFound, "file already downloaded")
+		return
+	}
 
 	ext := strings.ToLower(filepath.Ext(job.OutputPath))
 	contentType := mime.TypeByExtension(ext)

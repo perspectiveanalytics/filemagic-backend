@@ -127,3 +127,31 @@ func TestDownloadZipRejectsInvalidManifestBeforeMarkDownloaded(t *testing.T) {
 		t.Fatal("invalid zip download should not mark the job as downloaded")
 	}
 }
+
+func TestDownloadRejectsMissingOutputBeforeMarkDownloaded(t *testing.T) {
+	dir := t.TempDir()
+
+	q := queue.New(1, nil)
+	job, _, err := q.Submit("job-1", queue.ConversionImageFormat, "", "image.png", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.Status = queue.StatusDone
+	job.OutputPath = filepath.Join(dir, "missing.png")
+
+	h := NewConvertHandler(&config.Config{TmpfsPath: dir}, q, stats.New("", "", ""))
+	req := httptest.NewRequest(http.MethodGet, "/api/download/job-1", nil)
+	routeCtx := chi.NewRouteContext()
+	routeCtx.URLParams.Add("jobId", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
+	rec := httptest.NewRecorder()
+
+	h.Download(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected missing output to return 500, got %d", rec.Code)
+	}
+	if !job.MarkDownloaded() {
+		t.Fatal("failed download should not mark the job as downloaded")
+	}
+}
