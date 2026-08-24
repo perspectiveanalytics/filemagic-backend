@@ -48,6 +48,23 @@ func (h *ConvertHandler) isInternalRequest(r *http.Request) bool {
 	return h.cfg.TrustedIPs[host]
 }
 
+// ownerIP identifies the client for the queue's per-client fairness cap.
+// Trusts CF-Connecting-IP (set by Cloudflare) like the rate limiter does, and
+// returns "" for trusted/internal traffic so it stays exempt from the cap.
+func (h *ConvertHandler) ownerIP(r *http.Request) string {
+	if h.isInternalRequest(r) {
+		return ""
+	}
+	if cfIP := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cfIP != "" {
+		return cfIP
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
 // Per-route file size limits (bytes). Each limit is the UI-facing value + 1 MB
 // to avoid edge cases where a file passes frontend validation but is rejected here.
 const (
@@ -227,7 +244,7 @@ func (h *ConvertHandler) FontConvert(w http.ResponseWriter, r *http.Request) {
 	}
 	dst.Close()
 
-	job, position, err := h.queue.Submit(jobID, queue.ConversionFontConvert, inputPath, header.Filename, options, header.Size)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), queue.ConversionFontConvert, inputPath, header.Filename, options, header.Size)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -319,7 +336,7 @@ func (h *ConvertHandler) EbookConvert(w http.ResponseWriter, r *http.Request) {
 	}
 	dst.Close()
 
-	job, position, err := h.queue.Submit(jobID, queue.ConversionEbookConvert, inputPath, header.Filename, options, header.Size)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), queue.ConversionEbookConvert, inputPath, header.Filename, options, header.Size)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -401,7 +418,7 @@ func (h *ConvertHandler) SvgToPng(w http.ResponseWriter, r *http.Request) {
 	}
 	dst.Close()
 
-	job, position, err := h.queue.Submit(jobID, queue.ConversionSvgToPng, inputPath, header.Filename, options, header.Size)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), queue.ConversionSvgToPng, inputPath, header.Filename, options, header.Size)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -478,7 +495,7 @@ func (h *ConvertHandler) Decompress(w http.ResponseWriter, r *http.Request) {
 	}
 	dst.Close()
 
-	job, position, err := h.queue.Submit(jobID, queue.ConversionDecompress, inputPath, header.Filename, options, header.Size)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), queue.ConversionDecompress, inputPath, header.Filename, options, header.Size)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -562,7 +579,7 @@ func (h *ConvertHandler) MarkdownPDF(w http.ResponseWriter, r *http.Request) {
 	}
 	dst.Close()
 
-	job, position, err := h.queue.Submit(jobID, queue.ConversionMarkdownPDF, inputPath, header.Filename, nil, header.Size)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), queue.ConversionMarkdownPDF, inputPath, header.Filename, nil, header.Size)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -668,7 +685,7 @@ func (h *ConvertHandler) handleConversion(
 	}
 	dst.Close()
 
-	job, position, err := h.queue.Submit(jobID, convType, inputPath, originalName, options, header.Size)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), convType, inputPath, originalName, options, header.Size)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -796,7 +813,7 @@ func (h *ConvertHandler) handleMergeConversion(
 		"files": fileNames,
 	}
 
-	job, position, err := h.queue.Submit(jobID, convType, inputDir, "merged.pdf", options, totalSize)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), convType, inputDir, "merged.pdf", options, totalSize)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -905,7 +922,7 @@ func (h *ConvertHandler) handleCertConversion(
 	}
 	dst.Close()
 
-	job, position, err := h.queue.Submit(jobID, convType, inputPath, header.Filename, options, header.Size)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), convType, inputPath, header.Filename, options, header.Size)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -1045,7 +1062,7 @@ func (h *ConvertHandler) handleArchiveConversion(
 		outputName = "archive." + format
 	}
 
-	job, position, err := h.queue.Submit(jobID, convType, inputDir, outputName, options, totalSize)
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), convType, inputDir, outputName, options, totalSize)
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {
@@ -1119,7 +1136,7 @@ func (h *ConvertHandler) handleTextConversion(
 		return
 	}
 
-	job, position, err := h.queue.Submit(jobID, convType, "", outputName, options, int64(len(text)))
+	job, position, err := h.queue.Submit(jobID, h.ownerIP(r), convType, "", outputName, options, int64(len(text)))
 	if err != nil {
 		os.RemoveAll(jobDir)
 		if _, ok := err.(queue.QueueFullError); ok {

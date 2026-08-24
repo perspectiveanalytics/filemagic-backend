@@ -61,6 +61,7 @@ type Job struct {
 	InputSize      int64
 	OutputSize     int64
 	Metadata       map[string]any
+	OwnerIP        string
 	downloaded     atomic.Bool
 }
 
@@ -83,14 +84,26 @@ type Queue struct {
 	processFunc ProcessFunc
 	mu         sync.Mutex
 	queueOrder []string
+
+	// inflight counts pending+processing jobs per client IP so a single client
+	// cannot fill every slot and starve everyone else. perClientLimit == 0
+	// disables the fairness cap.
+	inflight       map[string]int
+	perClientLimit int
 }
 
 func New(maxSize int, processFunc ProcessFunc) *Queue {
+	perClientLimit := maxSize / 3
+	if perClientLimit < 2 {
+		perClientLimit = 2
+	}
 	return &Queue{
-		jobChan:     make(chan *Job, maxSize),
-		maxSize:     maxSize,
-		processFunc: processFunc,
-		queueOrder:  make([]string, 0, maxSize),
+		jobChan:        make(chan *Job, maxSize),
+		maxSize:        maxSize,
+		processFunc:    processFunc,
+		queueOrder:     make([]string, 0, maxSize),
+		inflight:       make(map[string]int),
+		perClientLimit: perClientLimit,
 	}
 }
 
@@ -120,15 +133,22 @@ func (q *Queue) worker(ctx context.Context) {
 			}
 			job.CompletedAt = time.Now()
 			q.jobs.Store(job.ID, job)
+			q.releaseSlot(job.OwnerIP)
 		}
 	}
 }
 
-func (q *Queue) Submit(jobID string, convType ConversionType, inputPath, originalName string, options map[string]any, inputSize int64) (*Job, int, error) {
+func (q *Queue) Submit(jobID, ownerIP string, convType ConversionType, inputPath, originalName string, options map[string]any, inputSize int64) (*Job, int, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	if len(q.jobChan) >= q.maxSize {
+		return nil, 0, ErrQueueFull
+	}
+
+	// Per-client fairness: reported to the caller as a full queue so we don't
+	// reveal the cap. ownerIP == "" (trusted/internal traffic) is exempt.
+	if ownerIP != "" && q.perClientLimit > 0 && q.inflight[ownerIP] >= q.perClientLimit {
 		return nil, 0, ErrQueueFull
 	}
 
@@ -140,15 +160,34 @@ func (q *Queue) Submit(jobID string, convType ConversionType, inputPath, origina
 		OriginalName:   originalName,
 		Options:        options,
 		InputSize:      inputSize,
+		OwnerIP:        ownerIP,
 		CreatedAt:      time.Now(),
 	}
 
 	q.jobs.Store(job.ID, job)
 	q.queueOrder = append(q.queueOrder, job.ID)
+	if ownerIP != "" {
+		q.inflight[ownerIP]++
+	}
 	q.jobChan <- job
 
 	position := len(q.queueOrder)
 	return job, position, nil
+}
+
+// releaseSlot decrements the in-flight counter for a client once its job has
+// finished (done or error), freeing a fairness slot.
+func (q *Queue) releaseSlot(ownerIP string) {
+	if ownerIP == "" {
+		return
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.inflight[ownerIP] <= 1 {
+		delete(q.inflight, ownerIP)
+	} else {
+		q.inflight[ownerIP]--
+	}
 }
 
 func (q *Queue) GetJob(jobID string) (*Job, bool) {

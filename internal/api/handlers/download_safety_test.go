@@ -99,7 +99,7 @@ func TestDownloadZipRejectsInvalidManifestBeforeMarkDownloaded(t *testing.T) {
 	}
 
 	q := queue.New(1, nil)
-	job, _, err := q.Submit("job-1", queue.ConversionDecompress, "", "archive.zip", nil, 0)
+	job, _, err := q.Submit("job-1", "", queue.ConversionDecompress, "", "archive.zip", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestDownloadRejectsMissingOutputBeforeMarkDownloaded(t *testing.T) {
 	dir := t.TempDir()
 
 	q := queue.New(1, nil)
-	job, _, err := q.Submit("job-1", queue.ConversionImageFormat, "", "image.png", nil, 0)
+	job, _, err := q.Submit("job-1", "", queue.ConversionImageFormat, "", "image.png", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
