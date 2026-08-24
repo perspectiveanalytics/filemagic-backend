@@ -67,11 +67,21 @@ type CertificateInfo struct {
 
 // ParseCertificate parses certificate data and returns structured information.
 // filename is used for format detection. password is for P12/PFX files.
-func ParseCertificate(data []byte, filename string, password string) (*CertificateInfo, error) {
+//
+// The recover guards against panics in the third-party BER/PKCS parsers
+// (go.mozilla.org/pkcs7 indexes past malformed input): this data is
+// attacker-controlled, so a panic here must not take down the process.
+func ParseCertificate(data []byte, filename string, password string) (info *CertificateInfo, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			info = nil
+			err = fmt.Errorf("malformed certificate data")
+		}
+	}()
+
 	format := detectFormat(data, filename)
 
 	var certs []*x509.Certificate
-	var err error
 
 	switch format {
 	case "PEM":
@@ -96,7 +106,7 @@ func ParseCertificate(data []byte, filename string, password string) (*Certifica
 	}
 
 	primary := certs[0]
-	info := buildCertInfo(primary, format)
+	info = buildCertInfo(primary, format)
 	info.CertCount = len(certs)
 
 	if len(certs) > 1 {
@@ -194,6 +204,10 @@ func parseDER(data []byte) ([]*x509.Certificate, error) {
 const maxChainLength = 20
 
 func parseP12(data []byte, password string) ([]*x509.Certificate, error) {
+	if err := guardP12Iterations(data); err != nil {
+		return nil, err
+	}
+
 	_, cert, caCerts, err := pkcs12.DecodeChain(data, password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse P12/PFX: %w", err)
