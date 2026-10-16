@@ -30,6 +30,14 @@ def apply_pages(doc, pages):
     selection = [p - 1 for p in pages]
     if not selection:
         raise ValueError("no valid pages in selection")
+    # Repeated selections must have independent page dictionaries: otherwise
+    # rotating one occurrence also rotates the other occurrences.
+    seen = set()
+    for position, index in enumerate(selection):
+        if index in seen:
+            doc.fullcopy_page(index)
+            selection[position] = len(doc) - 1
+        seen.add(index)
     doc.select(selection)
 
 

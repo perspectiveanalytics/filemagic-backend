@@ -30,6 +30,7 @@ class RedactionTests(unittest.TestCase):
             if result.returncode:
                 return result.returncode, None
             with pymupdf.open(root/'out.pdf') as doc:
+                self.rotations = [page.rotation for page in doc]
                 return 0, [page.get_text() for page in doc]
 
     def test_source_redactions_survive_page_operations(self):
@@ -40,6 +41,7 @@ class RedactionTests(unittest.TestCase):
                     self.assertEqual(code, 0)
                     self.assertNotIn('SECRET', ''.join(text))
                     self.assertEqual(len(text), len(pages))
+                    self.assertEqual(self.rotations, [(rotation + 90) % 360] + [rotation if p == 2 else 0 for p in pages[1:]])
                     if 1 in pages:
                         self.assertIn('PUBLIC', ''.join(text))
 
