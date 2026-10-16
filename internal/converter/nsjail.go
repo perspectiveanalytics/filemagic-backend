@@ -140,7 +140,7 @@ func (n *NsjailRunner) executeNsjail(ctx context.Context, command []string, jobD
 
 	slog.Info("executing nsjail",
 		"config", configFile,
-		"command", redactCommand(jailCmd),
+		"tool", filepath.Base(jailCmd[0]),
 		"timeout", timeout,
 	)
 
@@ -155,7 +155,7 @@ func (n *NsjailRunner) executeNsjail(ctx context.Context, command []string, jobD
 		}
 		slog.Error("nsjail execution failed",
 			"error", err,
-			"stderr", stderr.String(),
+			"stderrBytes", len(stderr.String()),
 		)
 		return fmt.Errorf("conversion failed: %w", err)
 	}
@@ -233,7 +233,7 @@ func (n *NsjailRunner) executeNsjailWithOutput(ctx context.Context, command []st
 
 	slog.Info("executing nsjail (with output)",
 		"config", configFile,
-		"command", redactCommand(jailCmd),
+		"tool", filepath.Base(jailCmd[0]),
 		"timeout", timeout,
 	)
 
@@ -248,7 +248,7 @@ func (n *NsjailRunner) executeNsjailWithOutput(ctx context.Context, command []st
 		}
 		slog.Error("nsjail execution failed",
 			"error", err,
-			"stderr", stderr.String(),
+			"stderrBytes", len(stderr.String()),
 		)
 		return nil, fmt.Errorf("conversion failed: %w", err)
 	}

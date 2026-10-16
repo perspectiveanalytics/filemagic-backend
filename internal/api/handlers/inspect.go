@@ -16,6 +16,9 @@ import (
 
 const certParseTimeout = 10 * time.Second
 
+// Hold slots until parsing actually exits, even after the HTTP deadline.
+var certParseSlots = make(chan struct{}, 2)
+
 const maxCertFileSize = 5 * 1024 * 1024 // 5MB
 
 type InspectHandler struct {
@@ -113,8 +116,14 @@ func parseCertWithTimeout(parent context.Context, data []byte, filename, passwor
 		info *inspector.CertificateInfo
 		err  error
 	}
+	select {
+	case certParseSlots <- struct{}{}:
+	default:
+		return nil, fmt.Errorf("certificate parser busy")
+	}
 	ch := make(chan result, 1)
 	go func() {
+		defer func() { <-certParseSlots }()
 		info, err := inspector.ParseCertificate(data, filename, password)
 		ch <- result{info, err}
 	}()

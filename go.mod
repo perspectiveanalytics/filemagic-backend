@@ -1,6 +1,6 @@
 module github.com/perspectiveanalytics/filemagic-backend
 
-go 1.26
+go 1.26.9
 
 require github.com/go-chi/chi/v5 v5.0.12
 
@@ -21,5 +21,5 @@ require (
 
 require (
 	golang.org/x/crypto v0.48.0 // indirect
-	software.sslmate.com/src/go-pkcs12 v0.7.0
+	software.sslmate.com/src/go-pkcs12 v0.7.2
 )

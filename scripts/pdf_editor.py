@@ -9,8 +9,10 @@ Config JSON fields (all optional):
   watermark    - {text, fontSize, color, opacity, rotation, position}
   pageNumbers  - {format, position, fontSize, color, startFrom, margin}
   redactions   - [{page (0-indexed), rect [x,y,w,h]}]
+  redactionSpace - "source" for original page indices and displayed coordinates
 """
 import json
+import math
 import sys
 
 try:
@@ -23,7 +25,9 @@ def apply_pages(doc, pages):
     """Reorder/extract pages. pages is a list of 1-indexed page numbers."""
     if not pages:
         return
-    selection = [p - 1 for p in pages if 1 <= p <= len(doc)]
+    if any(type(p) is not int or not 1 <= p <= len(doc) for p in pages):
+        raise ValueError("invalid page in selection")
+    selection = [p - 1 for p in pages]
     if not selection:
         raise ValueError("no valid pages in selection")
     doc.select(selection)
@@ -128,7 +132,7 @@ def apply_page_numbers(doc, pn):
         )
 
 
-def apply_redactions(doc, redactions):
+def apply_redactions(doc, redactions, displayed=False):
     """Apply redactions. Each redaction has page (0-indexed) and rect [x,y,w,h]."""
     if not redactions:
         return
@@ -137,14 +141,21 @@ def apply_redactions(doc, redactions):
     for r in redactions:
         page_idx = r.get("page", 0)
         rect_data = r.get("rect")
-        if rect_data is None or len(rect_data) != 4:
-            continue
-        if page_idx < 0 or page_idx >= len(doc):
-            continue
-
+        if not isinstance(rect_data, list) or len(rect_data) != 4:
+            raise ValueError("invalid redaction rectangle")
+        if type(page_idx) is not int or not 0 <= page_idx < len(doc):
+            raise ValueError("invalid redaction page")
+        if any(type(v) not in (int, float) or not math.isfinite(v) for v in rect_data):
+            raise ValueError("invalid redaction coordinates")
         x, y, w, h = rect_data
+        if x < 0 or y < 0 or w <= 0 or h <= 0:
+            raise ValueError("empty or negative redaction rectangle")
         rect = pymupdf.Rect(x, y, x + w, y + h)
         page = doc[page_idx]
+        if displayed:
+            if not page.rect.intersects(rect):
+                raise ValueError("redaction outside page")
+            rect = rect * page.derotation_matrix
         page.add_redact_annot(rect, fill=(0, 0, 0))
         pages_to_redact.add(page_idx)
 
@@ -174,12 +185,22 @@ def main():
 
     doc = pymupdf.open(input_path)
 
-    # Operations applied in order
+    redactions = config.get("redactions")
+    source_space = config.get("redactionSpace") == "source"
+    if redactions:
+        if source_space:
+            # Remove source content before selection, duplication or rotation.
+            apply_redactions(doc, redactions, displayed=True)
+        elif (config.get("rotations") or
+              config.get("pages", list(range(1, len(doc) + 1))) != list(range(1, len(doc) + 1))):
+            raise ValueError("combined redactions require source page coordinates")
+
     apply_pages(doc, config.get("pages"))
     apply_rotations(doc, config.get("rotations"))
     apply_watermark(doc, config.get("watermark"))
     apply_page_numbers(doc, config.get("pageNumbers"))
-    apply_redactions(doc, config.get("redactions"))
+    if redactions and not source_space:
+        apply_redactions(doc, redactions, displayed=True)
 
     doc.save(output_path, garbage=4, deflate=True)
     doc.close()

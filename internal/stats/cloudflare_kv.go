@@ -40,6 +40,13 @@ type Store struct {
 	pendingProcessed atomic.Int64
 	pendingThanks    atomic.Int64
 	flushDone        chan struct{}
+	flushMu          sync.Mutex
+	writes           map[string]counterWrite
+	confirmed        map[string]int64
+}
+
+type counterWrite struct {
+	value int64
 }
 
 type Stats struct {
@@ -115,8 +122,13 @@ func (s *Store) Get() Stats {
 	s.mu.RUnlock()
 
 	// Refresh cache.
-	processed := s.getKey(keyProcessed)
-	thanks := s.getKey(keyThanks)
+	processed, processedErr := s.getKey(keyProcessed)
+	thanks, thanksErr := s.getKey(keyThanks)
+	if processedErr != nil || thanksErr != nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		return s.cached
+	}
 
 	st := Stats{
 		FilesProcessed: processed,
@@ -145,69 +157,83 @@ func (s *Store) flushLoop() {
 }
 
 func (s *Store) flush() {
-	// Atomically swap pending counts to zero.
-	p := s.pendingProcessed.Swap(0)
-	t := s.pendingThanks.Swap(0)
-
-	if p > 0 {
-		s.incrementBy(keyProcessed, p)
+	s.flushMu.Lock()
+	defer s.flushMu.Unlock()
+	if s.writes == nil {
+		s.writes = make(map[string]counterWrite)
 	}
-	if t > 0 {
-		s.incrementBy(keyThanks, t)
+	if s.confirmed == nil {
+		s.confirmed = make(map[string]int64)
+	}
+	for key, pending := range map[string]*atomic.Int64{keyProcessed: &s.pendingProcessed, keyThanks: &s.pendingThanks} {
+		write, retry := s.writes[key]
+		if !retry {
+			if pending.Load() == 0 {
+				continue
+			}
+			current, err := s.getKey(key)
+			if err != nil {
+				continue
+			}
+			// KV reads may lag our own successful writes.
+			current = max(current, s.confirmed[key])
+			write = counterWrite{value: current + pending.Swap(0)}
+			s.writes[key] = write
+		}
+		// Retry the same absolute value after an ambiguous PUT failure. Reading
+		// and adding again could double-count a write accepted before a timeout.
+		if err := s.putKey(key, write.value); err != nil {
+			continue
+		}
+		s.confirmed[key] = write.value
+		delete(s.writes, key)
+		s.mu.Lock()
+		s.cachedAt = time.Time{}
+		s.mu.Unlock()
 	}
 }
 
-func (s *Store) incrementBy(key string, delta int64) {
-	current := s.getKey(key)
-	s.putKey(key, current+delta)
-
-	// Invalidate cache.
-	s.mu.Lock()
-	s.cachedAt = time.Time{}
-	s.mu.Unlock()
-}
-
-func (s *Store) getKey(key string) int64 {
+func (s *Store) getKey(key string) (int64, error) {
 	url := fmt.Sprintf("%s/accounts/%s/storage/kv/namespaces/%s/values/%s",
 		kvBaseURL, s.accountID, s.namespaceID, key)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		slog.Error("stats: failed to create request", "key", key, "error", err)
-		return 0
+		return 0, err
 	}
 	req.Header.Set("Authorization", "Bearer "+s.apiToken)
 
 	resp, err := s.client.Do(req) // #nosec G704 -- URL built from trusted server-side config, not user input
 	if err != nil {
 		slog.Error("stats: KV get failed", "key", key, "error", err)
-		return 0
+		return 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return 0
+		return 0, nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		slog.Error("stats: KV get unexpected status", "key", key, "status", resp.StatusCode)
-		return 0
+		return 0, fmt.Errorf("KV get status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64))
 	if err != nil {
 		slog.Error("stats: failed to read KV response", "key", key, "error", err)
-		return 0
+		return 0, err
 	}
 
 	var val int64
 	if err := json.Unmarshal(body, &val); err != nil {
-		slog.Error("stats: failed to parse KV value", "key", key, "raw", string(body), "error", err)
-		return 0
+		slog.Error("stats: failed to parse KV value", "key", key, "error", err)
+		return 0, err
 	}
-	return val
+	return val, nil
 }
 
-func (s *Store) putKey(key string, value int64) {
+func (s *Store) putKey(key string, value int64) error {
 	url := fmt.Sprintf("%s/accounts/%s/storage/kv/namespaces/%s/values/%s",
 		kvBaseURL, s.accountID, s.namespaceID, key)
 
@@ -216,7 +242,7 @@ func (s *Store) putKey(key string, value int64) {
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		slog.Error("stats: failed to create put request", "key", key, "error", err)
-		return
+		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+s.apiToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -224,11 +250,13 @@ func (s *Store) putKey(key string, value int64) {
 	resp, err := s.client.Do(req) // #nosec G704 -- URL built from trusted server-side config, not user input
 	if err != nil {
 		slog.Error("stats: KV put failed", "key", key, "error", err)
-		return
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		slog.Error("stats: KV put unexpected status", "key", key, "status", resp.StatusCode)
+		return fmt.Errorf("KV put status %d", resp.StatusCode)
 	}
+	return nil
 }

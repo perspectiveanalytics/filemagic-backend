@@ -37,6 +37,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	var fs syscall.Statfs_t
+	if err := syscall.Statfs(cfg.TmpfsPath, &fs); err != nil || fs.Type != 0x01021994 {
+		slog.Error("working directory must be on tmpfs")
+		os.Exit(1)
+	}
+
 	// Attempt cgroupv2 delegation setup for nsjail resource limits.
 	// This is optional — if delegation fails (e.g., not running under systemd
 	// with Delegate=yes), nsjail still works with rlimits + namespace isolation.

@@ -1,6 +1,6 @@
 # FileMagic - Backend
 
-Backend service for [filemagic.app](https://filemagic.app), a free and private file conversion platform. All file processing happens in memory on a tmpfs mount. Nothing touches disk, nothing is stored.
+Backend service for [filemagic.app](https://filemagic.app), a free and private file conversion platform. All file processing happens in memory on a tmpfs mount. Production must disable swap for the service and its sandboxes; temporary files are removed after processing. Technical logs have a separate, bounded retention policy.
 
 ## Disclaimer
 
@@ -41,7 +41,8 @@ Every file conversion runs inside an **nsjail** sandbox with:
 - cgroup v2 CPU and memory limits
 - No network access
 - PID and mount namespace isolation
-- Files processed on tmpfs, never written to persistent storage
+- Working directory checked as tmpfs at startup; MemorySwapMax=0 for the service and descendants
+- Dedicated volatile journal namespace, capped at 32 MiB and seven days
 
 See [filemagic.app/security](https://filemagic.app/security) for the full writeup.
 
@@ -58,3 +59,5 @@ CGO_ENABLED=1 go test -v -tags integration -timeout 10m ./tests/integration/...
 ## License
 
 AGPL-3.0
+
+Deploy `deploy/journald-filemagic.conf` as `/etc/systemd/journald@filemagic.conf` with the service unit. Read service logs with `journalctl --namespace=filemagic -u filemagic`. Existing logs in the default namespace are not removed by this change.

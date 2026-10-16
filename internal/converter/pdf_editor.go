@@ -190,6 +190,10 @@ func validatePDFEditOptions(opts map[string]any) error {
 		}
 	}
 
+	if space, ok := opts["redactionSpace"]; ok && space != "source" {
+		return fmt.Errorf("invalid redaction coordinate space")
+	}
+
 	// Validate redactions
 	if redactions, ok := opts["redactions"]; ok {
 		arr, ok := redactions.([]any)
@@ -204,7 +208,7 @@ func validatePDFEditOptions(opts map[string]any) error {
 			if !ok {
 				return fmt.Errorf("redaction[%d] must be an object", i)
 			}
-			if _, ok := toFloat64(m["page"]); !ok {
+			if page, ok := toFloat64(m["page"]); !ok || page < 0 || page >= maxPages || page != float64(int(page)) {
 				return fmt.Errorf("redaction[%d] missing page", i)
 			}
 			rect, ok := m["rect"].([]any)
@@ -213,7 +217,7 @@ func validatePDFEditOptions(opts map[string]any) error {
 			}
 			for j, v := range rect {
 				n, ok := toFloat64(v)
-				if !ok || n < 0 || n > 10000 {
+				if !ok || n < 0 || n > 10000 || (j >= 2 && n == 0) {
 					return fmt.Errorf("redaction[%d] rect[%d] out of range", i, j)
 				}
 			}

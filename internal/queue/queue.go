@@ -19,14 +19,14 @@ const (
 type ConversionType string
 
 const (
-	ConversionImageFormat   ConversionType = "image_format"
-	ConversionPDFCompress   ConversionType = "pdf_compress"
-	ConversionImageCompress ConversionType = "image_compress"
-	ConversionOCR            ConversionType = "ocr"
-	ConversionMetadataRemove ConversionType = "metadata_remove"
-	ConversionPDFMerge       ConversionType = "pdf_merge"
-	ConversionImageToPDF     ConversionType = "image_to_pdf"
-	ConversionQRCode         ConversionType = "qr_code"
+	ConversionImageFormat      ConversionType = "image_format"
+	ConversionPDFCompress      ConversionType = "pdf_compress"
+	ConversionImageCompress    ConversionType = "image_compress"
+	ConversionOCR              ConversionType = "ocr"
+	ConversionMetadataRemove   ConversionType = "metadata_remove"
+	ConversionPDFMerge         ConversionType = "pdf_merge"
+	ConversionImageToPDF       ConversionType = "image_to_pdf"
+	ConversionQRCode           ConversionType = "qr_code"
 	ConversionCertConvert      ConversionType = "cert_convert"
 	ConversionArchive          ConversionType = "archive"
 	ConversionMetadataInspect  ConversionType = "metadata_inspect"
@@ -62,7 +62,7 @@ type Job struct {
 	OutputSize     int64
 	Metadata       map[string]any
 	OwnerIP        string
-	downloaded     atomic.Bool
+	downloaded     *atomic.Bool
 }
 
 // MarkDownloaded atomically marks the job as downloaded.
@@ -78,12 +78,12 @@ const MaxOutputSize int64 = 100 << 20
 type ProcessFunc func(ctx context.Context, job *Job) error
 
 type Queue struct {
-	jobs       sync.Map
-	jobChan    chan *Job
-	maxSize    int
+	jobs        sync.Map
+	jobChan     chan *Job
+	maxSize     int
 	processFunc ProcessFunc
-	mu         sync.Mutex
-	queueOrder []string
+	mu          sync.Mutex
+	queueOrder  []string
 
 	// inflight counts pending+processing jobs per client IP so a single client
 	// cannot fill every slot and starve everyone else. perClientLimit == 0
@@ -116,12 +116,15 @@ func (q *Queue) worker(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case job := <-q.jobChan:
+		case queued := <-q.jobChan:
+			// Only the worker mutates this copy. Published states remain immutable.
+			job := *queued
 			q.removeFromOrder(job.ID)
 			job.Status = StatusProcessing
-			q.jobs.Store(job.ID, job)
+			processing := job
+			q.jobs.Store(job.ID, &processing)
 
-			err := q.processFunc(ctx, job)
+			err := q.processFunc(ctx, &job)
 			if err != nil {
 				job.Status = StatusError
 				job.Error = err.Error()
@@ -132,7 +135,7 @@ func (q *Queue) worker(ctx context.Context) {
 				job.Status = StatusDone
 			}
 			job.CompletedAt = time.Now()
-			q.jobs.Store(job.ID, job)
+			q.jobs.Store(job.ID, &job)
 			q.releaseSlot(job.OwnerIP)
 		}
 	}
@@ -162,6 +165,7 @@ func (q *Queue) Submit(jobID, ownerIP string, convType ConversionType, inputPath
 		InputSize:      inputSize,
 		OwnerIP:        ownerIP,
 		CreatedAt:      time.Now(),
+		downloaded:     &atomic.Bool{},
 	}
 
 	q.jobs.Store(job.ID, job)
@@ -190,6 +194,8 @@ func (q *Queue) releaseSlot(ownerIP string) {
 	}
 }
 
+// GetJob returns a read-only snapshot. Options and Metadata must not be mutated
+// after publication. MarkDownloaded is the only mutable operation.
 func (q *Queue) GetJob(jobID string) (*Job, bool) {
 	val, ok := q.jobs.Load(jobID)
 	if !ok {

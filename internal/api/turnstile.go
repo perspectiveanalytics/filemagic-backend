@@ -62,7 +62,7 @@ func TurnstileMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 			}
 
 			if !result.Success {
-				slog.Warn("turnstile verification failed", "ip", ip, "errors", result.ErrorCodes)
+				slog.Warn("turnstile verification failed", "errors", result.ErrorCodes)
 				response.Error(w, http.StatusForbidden, response.CodeValidationError, "security verification failed")
 				return
 			}
